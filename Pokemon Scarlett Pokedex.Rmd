@@ -1,0 +1,187 @@
+---
+title: "Pokemon Scarlett Pokedex"
+author: "Evan Garcia"
+date: "2022-12-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = FALSE}
+library(knitr)
+library(tidyverse)
+library(dplyr)
+library(rvest) # package used to extract information from websites
+library(stringr) # package used to process text and strings
+library(readr)
+```
+
+```{r}
+url3 <- "https://rankedboost.com/pokemon-scarlet-violet/pokedex/"
+
+tables <- 
+  read_html(url3) %>% 
+  html_nodes("table") %>% 
+  html_table()
+pokedex <- tables[[1]]
+suppressWarnings(pokedex$`Type` <- as.character(pokedex$`Type`))
+
+Pokedex <- pokedex %>% mutate(Mons = Pokemon, Mons = str_remove(Mons, "New"),Mons = str_remove(Mons, "Legendary"), Mons = str_remove(Mons, "Violet"), Mons = str_remove(Mons, " Exclusive"), Mons = str_remove(Mons, "\r\n\t\t\t\t\t\t\r\n\t\t\t\t\t\t"), Mons = str_remove(Mons, " Male"), Mons = str_remove(Mons, " Female"), Mons = str_remove(Mons, " Pom Pom"), Mons = str_remove(Mons, "Paldean "), Mons = str_remove(Mons, "Alolan "), Mons = str_remove(Mons, "Hisuian "), Mons = str_remove(Mons, "Galarian "), Mons = str_remove(Mons, "Scarlet"), Mons = str_remove(Mons, " Unbound"), Mons = str_remove(Mons, " Hero"), Mons = str_remove(Mons, "Wash "), Mons = str_remove(Mons, "Frost "), Mons = str_remove(Mons, "Heat "), Mons = str_remove(Mons, "Mow "), Mons = str_remove(Mons, "Fan "), Mons = str_remove(Mons, " Chest"), Mons = str_remove(Mons, " Roaming"), Mons = str_remove(Mons, " Donphan"), Mons = str_remove(Mons, " Salamence"), Mons = str_remove(Mons, " Gallade"), Mons = str_remove(Mons, " Volcarona"), Mons = str_remove(Mons, " Amoonguss"), Mons = str_remove(Mons, " Misdreavus"), Mons = str_remove(Mons, " Magneton"), Mons = str_remove(Mons, " Delibird"), Mons = str_remove(Mons, " Hariyama"), Mons = str_remove(Mons, " Hydreigon"), Mons = str_remove(Mons, " Jigglypuff"), Mons = str_remove(Mons, " Tyranitar"), Mons = str_remove(Mons, " Rapid Strike"), Mons = str_remove(Mons, " Single Strike"),Mons = str_remove(Mons, "Origin "), Mons = str_replace(Mons, " ", "-"))
+
+Mons <- Pokedex %>% select(Mons) %>% pull()
+Pokes <- Pokedex %>% select(Mons) %>% pull()
+```
+
+```{r}
+move_list <- function(pokemon){
+  url <- paste0("https://pokemondb.net/pokedex/", pokemon)
+  list_table <- 
+    read_html(url) %>% 
+    html_nodes(xpath = '//table[@class = "data-table"]') %>% 
+    html_table()
+  level_up <- list_table[[1]]
+  return(level_up)
+}
+tm_list <- function(pokemon){
+  url <- paste0("https://pokemondb.net/pokedex/", pokemon)
+  list_table <- 
+    read_html(url) %>% 
+    html_nodes(xpath = '//table[@class = "data-table"]') %>% 
+    html_table()
+  n <- length(list_table)
+  tm_moves <- list_table[[n]]
+  return(tm_moves)
+}
+ab_list <- function(pokemon){
+  url <- paste0("https://pokemondb.net/pokedex/", pokemon)
+  list_table <- 
+    read_html(url) %>% 
+    html_nodes(xpath = '//table[@class="vitals-table"]') %>% 
+    html_table()
+  ab <- list_table[[1]]
+  ab_better <- ab %>% pivot_wider(names_from = `X1`, values_from = `X2`) %>% select("Abilities")
+  return(ab_better)
+}
+ev_list <- function(pokemon){
+  url <- paste0("https://pokemondb.net/pokedex/", pokemon)
+  list_table <- 
+    read_html(url) %>% 
+    html_nodes(xpath = '//table[@class="vitals-table"]') %>% 
+    html_table()
+  ev_up <- list_table[[2]]
+  ev_better <- ev_up %>% pivot_wider(names_from = `X1`, values_from = `X2`)
+
+  return(ev_better)
+}
+
+```
+
+
+```{r}
+level_moves <- lapply(Mons, move_list) 
+df<- tibble(Pokes, level_moves)
+
+tm_applied <- lapply(Mons, tm_list) 
+tm_moves<- tibble(Pokes, level_moves)
+
+test2 <- lapply(Mons, ev_list)
+other_stats <- do.call(rbind.data.frame, test2)
+
+test7 <- lapply(Mons, ab_list)
+Abilities <- do.call(rbind.data.frame, test7)
+```
+
+
+```{r}
+df1 <- tibble(Pokes, Abilities)
+df2 <- tibble(Pokes, other_stats)
+df3 <- Pokedex %>% inner_join(df1, by = c("Mons" = "Pokes"))
+df4 <- df3 %>% inner_join(df2, by = c("Mons" = "Pokes"))
+df5 <- df4[!duplicated(df4), ]
+df6 <- df5 %>% inner_join(df, by = c("Mons" = "Pokes")) 
+dex_final <- df6[!duplicated(df6), ]
+dex_final <- dex_final[,-3]
+suppressWarnings(dex_final$`Base Exp.` <- as.numeric(dex_final$`Base Exp.`))
+```
+
+```{r}
+dex_final <- dex_final %>% relocate(Mons, .before = Type) %>% relocate(level_moves, .before = `EV yield`) %>% rename(Pokemon = Mons)
+```
+
+```{r}
+save(dex_final, file = "Pokedex.RData")
+```
+
+```{r}
+load("Pokedex.RData")
+```
+
+
+```{r}
+head(dex_final)[[ncol(dex_final)]]
+```
+
+
+```{r}
+dex_final %>% filter(Total <= 500) %>% select(-ID, -TIER, -Pokemon, -`EV yield`, -`Catch rate`, -`Base Friendship`, -`Base Exp.`) %>% arrange(desc(Def))
+```
+
+#Examples of Various applications
+
+```{r}
+dex_final %>% 
+  filter(str_detect(TIER, "A")) %>% 
+  arrange(Speed) %>% 
+  head(5)
+```
+
+```{r}
+# PokedexNew <- dex_final %>% filter(str_detect(Pokemon, "New")) %>% 
+#   print()
+```
+
+```{r}
+pokedex %>% 
+ filter(str_detect(Type, "Ground"), `Sp.Atk` >= 95 | `Atk` >= 95) %>% 
+  select(Pokemon, Type, Total, HP, Atk, Def, Sp.Atk, Sp.Def, Speed) %>% 
+  arrange(desc(Atk))
+```
+
+```{r}
+dex_final %>% 
+ filter(str_detect(Type, "Steel")) %>% 
+  arrange(desc(Speed))
+```
+
+```{r}
+dex_final %>% 
+  mutate(Sweep = Atk + Speed, Ratio = Speed/Atk) %>% 
+  select(Pokemon, Sweep, Atk, Speed, Total, Ratio) %>% 
+  filter(Ratio == 1) %>% 
+  arrange(desc(Ratio))
+```
+
+```{r}
+
+dex_final %>% 
+  group_by(Type) %>% 
+  summarize(Avg = mean(Total)) %>% 
+  arrange(Avg)
+```
+
+```{r}
+dex_final[382:392,4:ncol(dex_final)]
+```
+
+```{r}
+dex_final %>% group_by(Type) %>% 
+  summarize(avg = mean(Total)) 
+```
+
+  
+```{r}
+# test9 <- Pokedex %>% inner_join(df, by = c("Mons" = "Pokes"))
+# Base_dex <- test9[!duplicated(test9), ]
+```
